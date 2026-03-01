@@ -2,7 +2,7 @@
 
 import PackageDescription
 
-let version = "0.11.1"
+let version = "0.11.2"
 let baseURL = "https://github.com/TimOliver/libjxl-cocoa/releases/download/\(version)"
 
 let package = Package(
