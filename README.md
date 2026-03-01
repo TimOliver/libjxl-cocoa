@@ -1,6 +1,6 @@
 # libjxl for Apple Platforms
 
-Pre-built [libjxl](https://github.com/libjxl/libjxl) (JPEG XL) xcframework for Apple platforms, distributed via Swift Package Manager.
+Pre-built [libjxl](https://github.com/libjxl/libjxl) (JPEG XL) xcframeworks for Apple platforms, distributed via Swift Package Manager.
 
 ## Supported Platforms
 
@@ -17,7 +17,10 @@ Pre-built [libjxl](https://github.com/libjxl/libjxl) (JPEG XL) xcframework for A
 
 ## Library
 
-A single static XCFramework containing the full libjxl encoder, decoder, threading support, and all bundled dependencies (Highway, Brotli, skcms). All platforms are combined into one XCFramework.
+Both **static** and **dynamic** XCFrameworks are provided, each containing the full libjxl encoder, decoder, threading support, and all bundled dependencies (Highway, Brotli, skcms).
+
+- **Static** (`jxl`) — linked into your binary at build time. Requires linking `libc++` (Xcode handles this automatically in most cases).
+- **Dynamic** (`jxl-dynamic`) — loaded at runtime. No additional linker flags needed.
 
 ## Swift Package Manager
 
@@ -29,13 +32,17 @@ dependencies: [
 ]
 ```
 
-Then add it to your target:
+Then add either the static or dynamic product to your target:
 
 ```swift
 .target(
     name: "YourTarget",
     dependencies: [
+        // Static (default)
         .product(name: "jxl", package: "libjxl-cocoa"),
+
+        // — or dynamic —
+        // .product(name: "jxl-dynamic", package: "libjxl-cocoa"),
     ]
 )
 ```
@@ -44,7 +51,18 @@ Or add it via Xcode: File > Add Package Dependencies, and enter the repository U
 
 ### Linking Note
 
-libjxl is a C++ library with a C API. When linking the static library, your project must also link against the C++ standard library (`libc++`). Xcode typically handles this automatically, but if you encounter linker errors, add `-lc++` to your "Other Linker Flags" build setting.
+When using the **static** library, your project must also link against the C++ standard library (`libc++`). Xcode typically handles this automatically, but if you encounter linker errors, add `-lc++` to your "Other Linker Flags" build setting. This is not required for the dynamic variant.
+
+## Manual Download
+
+Per-platform XCFrameworks are available as individual downloads from each [release](https://github.com/TimOliver/libjxl-cocoa/releases):
+
+| Platform | Static | Dynamic |
+|----------|--------|---------|
+| iOS | `libjxl-ios-static.xcframework.zip` | `libjxl-ios-dynamic.xcframework.zip` |
+| macOS | `libjxl-macos-static.xcframework.zip` | `libjxl-macos-dynamic.xcframework.zip` |
+| tvOS | `libjxl-tvos-static.xcframework.zip` | `libjxl-tvos-dynamic.xcframework.zip` |
+| visionOS | `libjxl-visionos-static.xcframework.zip` | `libjxl-visionos-dynamic.xcframework.zip` |
 
 ## Building from Source
 
@@ -66,10 +84,10 @@ sh build.sh macos
 sh build.sh tvos
 sh build.sh visionos
 
-# Create combined xcframework from already-built platforms
+# Create combined xcframeworks from already-built platforms
 sh build.sh xcframework
 
-# Package xcframework into zip with checksum
+# Package all xcframeworks into zips with checksums
 sh build.sh package
 ```
 
@@ -81,18 +99,26 @@ Override the libjxl version with an environment variable:
 LIBJXL_TAG_VERSION=0.11.0 sh build.sh all
 ```
 
-Default version: **0.11.1**
+Default version: **0.11.2**
 
 ## Output
 
 After running `sh build.sh all`, you'll find:
 
-- `output/libjxl.xcframework` — Combined XCFramework with all platforms
-- `output/libjxl.xcframework.zip` — Zipped for distribution
+**Per-platform** (in `build-<platform>/static/` and `build-<platform>/dynamic/`):
+- `libjxl.xcframework` — Static or dynamic framework for a single platform
+
+**Combined** (in `output/`):
+- `libjxl-static.xcframework` — Static XCFramework with all platforms
+- `libjxl-dynamic.xcframework` — Dynamic XCFramework with all platforms
+
+**Zips** (in `output/`):
+- 8 per-platform zips (e.g., `libjxl-ios-static.xcframework.zip`)
+- 2 combined zips (`libjxl-static.xcframework.zip`, `libjxl-dynamic.xcframework.zip`)
 
 ## CI / Releases
 
-Releases are built via a GitHub Actions workflow (`build.yml`), triggered manually with a version number input. The workflow builds all platforms and uploads the xcframework zip as a release asset.
+Releases are built via a GitHub Actions workflow (`build.yml`), triggered manually with a version number input. The workflow builds all platforms and uploads all 10 xcframework zips as release assets.
 
 ## License
 

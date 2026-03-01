@@ -49,6 +49,33 @@ download_library() {
     ${LIBRARY_REPO} ${LIBRARY_DIR}
 }
 
+# Write a Clang module map into the given directory
+write_modulemap() {
+  DEST=$1
+cat <<EOT > ${DEST}/module.modulemap
+module jxl [system] {
+  header "jxl/jxl_export.h"
+  header "jxl/jxl_cms_export.h"
+  header "jxl/jxl_threads_export.h"
+  header "jxl/types.h"
+  header "jxl/memory_manager.h"
+  header "jxl/stats.h"
+  header "jxl/cms.h"
+  header "jxl/cms_interface.h"
+  header "jxl/color_encoding.h"
+  header "jxl/compressed_icc.h"
+  header "jxl/codestream_header.h"
+  header "jxl/decode.h"
+  header "jxl/encode.h"
+  header "jxl/gain_map.h"
+  header "jxl/parallel_runner.h"
+  header "jxl/thread_parallel_runner.h"
+  header "jxl/resizable_parallel_runner.h"
+  export *
+}
+EOT
+}
+
 build() {
   CMAKE_PATH=$1
 
@@ -96,16 +123,33 @@ build() {
     mv libjxl-merged.a libjxl.a
   fi
 
-  # Copy public headers into the build output so they're always available
+  # Create dynamic library from merged static archive
+  SDK=$(grep 'xcrun --sdk' toolchain.cmake | sed "s/.*--sdk \([^ ]*\) .*/\1/")
+  SYSROOT=$(xcrun --sdk ${SDK} --show-sdk-path)
+  C_FLAGS=$(grep 'set(CMAKE_C_FLAGS' toolchain.cmake | sed 's/.*"\(.*\)"/\1/')
+
+  ${CXX_COMPILER} -dynamiclib \
+    -install_name @rpath/libjxl.dylib \
+    -isysroot ${SYSROOT} \
+    ${C_FLAGS} \
+    -Wl,-all_load libjxl.a \
+    -lc++ \
+    -o libjxl.dylib
+
+  # Copy public headers into the build output
   mkdir -p include/jxl
   cp ../../libjxl/lib/include/jxl/*.h include/jxl/
 
-  # Copy generated export headers (these are produced by cmake)
+  # Copy generated export headers (produced by cmake)
   for EXPORT_HEADER in $(find . -name "*_export.h" -path "*/jxl/*" -type f); do
     cp ${EXPORT_HEADER} include/jxl/
   done
 
-  # For static builds, force JXL_STATIC_DEFINE so export macros resolve to nothing
+  # Create dynamic headers (original, without JXL_STATIC_DEFINE)
+  mkdir -p include-dynamic
+  cp -r include/jxl include-dynamic/jxl
+
+  # For static headers, force JXL_STATIC_DEFINE so export macros resolve to nothing
   for HEADER in jxl_export.h jxl_cms_export.h jxl_threads_export.h; do
     HEADER_FILE="include/jxl/${HEADER}"
     if [ -f "${HEADER_FILE}" ]; then
@@ -113,6 +157,10 @@ build() {
       mv "${HEADER_FILE}.tmp" "${HEADER_FILE}"
     fi
   done
+
+  # Write module maps for both static and dynamic header sets
+  write_modulemap "include"
+  write_modulemap "include-dynamic"
 
   cd ${BASE_PATH}
 }
@@ -128,8 +176,8 @@ make_fat_binary() {
   OUTPUT_PATH=${DIRECTORY}"/"${OUTPUT}
   mkdir -p ${OUTPUT_PATH}
 
-  # Build fat binary for the merged static library
-  for LIBRARY in libjxl.a; do
+  # Build fat binaries for both static and dynamic libraries
+  for LIBRARY in libjxl.a libjxl.dylib; do
     # Check if the library exists in the first slice
     FIRST_SLICE=${SLICES[0]}
     if [ ! -f "${DIRECTORY}/${FIRST_SLICE}/${LIBRARY}" ]; then
@@ -143,6 +191,47 @@ make_fat_binary() {
 
     lipo -create ${LIBRARY_PATHS} -output ${OUTPUT_PATH}"/"${LIBRARY}
   done
+}
+
+# Create per-platform static and dynamic xcframeworks
+make_platform_xcframework() {
+  BUILD_DIR=$1
+  shift
+  HEADER_SOURCE=$1
+  shift
+  SLICES=("$@")
+
+  STATIC_HEADERS="${BUILD_DIR}/${HEADER_SOURCE}/include"
+  DYNAMIC_HEADERS="${BUILD_DIR}/${HEADER_SOURCE}/include-dynamic"
+
+  STATIC_ARGS=""
+  DYNAMIC_ARGS=""
+
+  for SLICE in ${SLICES[@]}; do
+    STATIC_LIB="${BUILD_DIR}/${SLICE}/libjxl.a"
+    DYNAMIC_LIB="${BUILD_DIR}/${SLICE}/libjxl.dylib"
+
+    if [ -f "${STATIC_LIB}" ]; then
+      STATIC_ARGS+="-library ${STATIC_LIB} -headers ${STATIC_HEADERS} "
+    fi
+    if [ -f "${DYNAMIC_LIB}" ]; then
+      DYNAMIC_ARGS+="-library ${DYNAMIC_LIB} -headers ${DYNAMIC_HEADERS} "
+    fi
+  done
+
+  mkdir -p "${BUILD_DIR}/static" "${BUILD_DIR}/dynamic"
+
+  if [ ! -z "${STATIC_ARGS}" ]; then
+    rm -rf "${BUILD_DIR}/static/libjxl.xcframework"
+    xcodebuild -create-xcframework ${STATIC_ARGS} \
+      -output "${BUILD_DIR}/static/libjxl.xcframework"
+  fi
+
+  if [ ! -z "${DYNAMIC_ARGS}" ]; then
+    rm -rf "${BUILD_DIR}/dynamic/libjxl.xcframework"
+    xcodebuild -create-xcframework ${DYNAMIC_ARGS} \
+      -output "${BUILD_DIR}/dynamic/libjxl.xcframework"
+  fi
 }
 
 build_ios() {
@@ -165,6 +254,10 @@ build_ios() {
   SLICES=("ios-mac-catalyst-x86" "ios-mac-catalyst-arm64")
   make_fat_binary "build-ios" "ios-output/ios-mac-catalyst" "${SLICES[@]}"
 
+  # Per-platform xcframeworks (static + dynamic)
+  make_platform_xcframework "build-ios" "ios-device-arm64" \
+    "ios-output/ios-device" "ios-output/ios-simulator" "ios-output/ios-mac-catalyst"
+
   echo "=== iOS build complete ==="
 }
 
@@ -181,6 +274,10 @@ build_macos() {
   # Combine into fat binaries
   SLICES=("macos-arm64" "macos-x86")
   make_fat_binary "build-macos" "macos-output/macos" "${SLICES[@]}"
+
+  # Per-platform xcframeworks (static + dynamic)
+  make_platform_xcframework "build-macos" "macos-arm64" \
+    "macos-output/macos"
 
   echo "=== macOS build complete ==="
 }
@@ -202,6 +299,10 @@ build_tvos() {
   SLICES=("tvos-simulator-arm64" "tvos-simulator-x86")
   make_fat_binary "build-tvos" "tvos-output/tvos-simulator" "${SLICES[@]}"
 
+  # Per-platform xcframeworks (static + dynamic)
+  make_platform_xcframework "build-tvos" "tvos-device-arm64" \
+    "tvos-output/tvos-device" "tvos-output/tvos-simulator"
+
   echo "=== tvOS build complete ==="
 }
 
@@ -219,19 +320,25 @@ build_visionos() {
   for S in ${SLICES[@]}; do
     OUTPUT_PATH="build-visionos/visionos-output/${S}"
     mkdir -p ${OUTPUT_PATH}
-    if [ -f "build-visionos/${S}/libjxl.a" ]; then
-      cp "build-visionos/${S}/libjxl.a" "${OUTPUT_PATH}/libjxl.a"
-    fi
+    for LIBRARY in libjxl.a libjxl.dylib; do
+      if [ -f "build-visionos/${S}/${LIBRARY}" ]; then
+        cp "build-visionos/${S}/${LIBRARY}" "${OUTPUT_PATH}/${LIBRARY}"
+      fi
+    done
   done
+
+  # Per-platform xcframeworks (static + dynamic)
+  make_platform_xcframework "build-visionos" "visionos-device-arm64" \
+    "visionos-output/visionos-device-arm64" "visionos-output/visionos-simulator-arm64"
 
   echo "=== visionOS build complete ==="
 }
 
-# Create a single XCFramework combining all platform slices
+# Create combined XCFrameworks with all platform slices
 make_xcframework() {
-  echo "=== Creating combined XCFramework ==="
+  echo "=== Creating combined XCFrameworks ==="
 
-  # Prepare headers from any available build slice
+  # Find header source from any available build slice
   HEADER_SOURCE=""
   for DIR in build-ios/ios-device-arm64 build-macos/macos-arm64 build-tvos/tvos-device-arm64 build-visionos/visionos-device-arm64; do
     if [ -d "${DIR}/include/jxl" ]; then
@@ -245,100 +352,96 @@ make_xcframework() {
     exit 1
   fi
 
-  HEADERS_DIR="${OUTPUT_DIR}/include"
-  rm -rf ${HEADERS_DIR}
-  mkdir -p ${HEADERS_DIR}/jxl
-  cp ${HEADER_SOURCE}/include/jxl/*.h ${HEADERS_DIR}/jxl/
-
-  # Write module map
-cat <<EOT > ${HEADERS_DIR}/module.modulemap
-module jxl [system] {
-  header "jxl/jxl_export.h"
-  header "jxl/jxl_cms_export.h"
-  header "jxl/jxl_threads_export.h"
-  header "jxl/types.h"
-  header "jxl/memory_manager.h"
-  header "jxl/stats.h"
-  header "jxl/cms.h"
-  header "jxl/cms_interface.h"
-  header "jxl/color_encoding.h"
-  header "jxl/compressed_icc.h"
-  header "jxl/codestream_header.h"
-  header "jxl/decode.h"
-  header "jxl/encode.h"
-  header "jxl/gain_map.h"
-  header "jxl/parallel_runner.h"
-  header "jxl/thread_parallel_runner.h"
-  header "jxl/resizable_parallel_runner.h"
-  export *
-}
-EOT
-
-  # Collect all platform fat binaries into one XCFramework
-  XCF_ARGS=""
-
-  # iOS
-  for SLICE in ios-device ios-simulator ios-mac-catalyst; do
-    LIB="build-ios/ios-output/${SLICE}/libjxl.a"
-    if [ -f "${LIB}" ]; then
-      XCF_ARGS+="-library ${LIB} -headers ${HEADERS_DIR} "
-    fi
-  done
-
-  # macOS
-  LIB="build-macos/macos-output/macos/libjxl.a"
-  if [ -f "${LIB}" ]; then
-    XCF_ARGS+="-library ${LIB} -headers ${HEADERS_DIR} "
-  fi
-
-  # tvOS
-  for SLICE in tvos-device tvos-simulator; do
-    LIB="build-tvos/tvos-output/${SLICE}/libjxl.a"
-    if [ -f "${LIB}" ]; then
-      XCF_ARGS+="-library ${LIB} -headers ${HEADERS_DIR} "
-    fi
-  done
-
-  # visionOS
-  for SLICE in visionos-device-arm64 visionos-simulator-arm64; do
-    LIB="build-visionos/visionos-output/${SLICE}/libjxl.a"
-    if [ -f "${LIB}" ]; then
-      XCF_ARGS+="-library ${LIB} -headers ${HEADERS_DIR} "
-    fi
-  done
-
-  if [ -z "${XCF_ARGS}" ]; then
-    echo "Error: No libraries found. Build platforms first."
-    exit 1
-  fi
-
   mkdir -p ${OUTPUT_DIR}
-  rm -rf ${OUTPUT_DIR}/libjxl.xcframework
-  xcodebuild -create-xcframework ${XCF_ARGS} -output ${OUTPUT_DIR}/libjxl.xcframework
 
-  echo "=== XCFramework created at ${OUTPUT_DIR}/libjxl.xcframework ==="
+  # Create both static and dynamic combined xcframeworks
+  for VARIANT in static dynamic; do
+    if [ "${VARIANT}" = "static" ]; then
+      HEADERS="${HEADER_SOURCE}/include"
+      EXT="a"
+    else
+      HEADERS="${HEADER_SOURCE}/include-dynamic"
+      EXT="dylib"
+    fi
+
+    XCF_ARGS=""
+
+    # iOS
+    for SLICE in ios-device ios-simulator ios-mac-catalyst; do
+      LIB="build-ios/ios-output/${SLICE}/libjxl.${EXT}"
+      if [ -f "${LIB}" ]; then
+        XCF_ARGS+="-library ${LIB} -headers ${HEADERS} "
+      fi
+    done
+
+    # macOS
+    LIB="build-macos/macos-output/macos/libjxl.${EXT}"
+    if [ -f "${LIB}" ]; then
+      XCF_ARGS+="-library ${LIB} -headers ${HEADERS} "
+    fi
+
+    # tvOS
+    for SLICE in tvos-device tvos-simulator; do
+      LIB="build-tvos/tvos-output/${SLICE}/libjxl.${EXT}"
+      if [ -f "${LIB}" ]; then
+        XCF_ARGS+="-library ${LIB} -headers ${HEADERS} "
+      fi
+    done
+
+    # visionOS
+    for SLICE in visionos-device-arm64 visionos-simulator-arm64; do
+      LIB="build-visionos/visionos-output/${SLICE}/libjxl.${EXT}"
+      if [ -f "${LIB}" ]; then
+        XCF_ARGS+="-library ${LIB} -headers ${HEADERS} "
+      fi
+    done
+
+    if [ -z "${XCF_ARGS}" ]; then
+      echo "Warning: No ${VARIANT} libraries found for combined xcframework."
+      continue
+    fi
+
+    rm -rf "${OUTPUT_DIR}/libjxl-${VARIANT}.xcframework"
+    xcodebuild -create-xcframework ${XCF_ARGS} \
+      -output "${OUTPUT_DIR}/libjxl-${VARIANT}.xcframework"
+
+    echo "=== Created ${OUTPUT_DIR}/libjxl-${VARIANT}.xcframework ==="
+  done
 }
 
 package() {
   echo "=== Packaging ==="
 
-  if [ ! -d "${OUTPUT_DIR}/libjxl.xcframework" ]; then
-    echo "Error: No xcframework found. Run 'sh build.sh all' first."
-    exit 1
-  fi
+  mkdir -p ${OUTPUT_DIR}
 
-  cd ${OUTPUT_DIR}
-  zip -r -y libjxl.xcframework.zip libjxl.xcframework
-  cd ${BASE_PATH}
+  # Package per-platform xcframeworks (8 zips)
+  for PLATFORM in ios macos tvos visionos; do
+    for VARIANT in static dynamic; do
+      XCF="build-${PLATFORM}/${VARIANT}/libjxl.xcframework"
+      if [ -d "${XCF}" ]; then
+        ZIP_NAME="libjxl-${PLATFORM}-${VARIANT}.xcframework.zip"
+        cd "build-${PLATFORM}/${VARIANT}"
+        zip -r -y "${OUTPUT_DIR}/${ZIP_NAME}" libjxl.xcframework
+        cd ${BASE_PATH}
+        echo "${ZIP_NAME}: $(swift package compute-checksum "${OUTPUT_DIR}/${ZIP_NAME}")"
+      fi
+    done
+  done
 
-  echo ""
-  echo "=== Checksum ==="
-  CHECKSUM=$(swift package compute-checksum ${OUTPUT_DIR}/libjxl.xcframework.zip)
-  echo "libjxl.xcframework.zip: ${CHECKSUM}"
+  # Package combined xcframeworks (2 zips)
+  for VARIANT in static dynamic; do
+    XCF="${OUTPUT_DIR}/libjxl-${VARIANT}.xcframework"
+    if [ -d "${XCF}" ]; then
+      ZIP_NAME="libjxl-${VARIANT}.xcframework.zip"
+      cd ${OUTPUT_DIR}
+      zip -r -y "${ZIP_NAME}" "libjxl-${VARIANT}.xcframework"
+      cd ${BASE_PATH}
+      echo "${ZIP_NAME}: $(swift package compute-checksum "${OUTPUT_DIR}/${ZIP_NAME}")"
+    fi
+  done
 
   echo ""
   echo "=== Packaging complete ==="
-  echo "Output: ${OUTPUT_DIR}/libjxl.xcframework.zip"
 }
 
 # Commands

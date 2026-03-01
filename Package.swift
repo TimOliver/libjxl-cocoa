@@ -15,11 +15,17 @@ let package = Package(
     ],
     products: [
         .library(name: "jxl", targets: ["jxl"]),
+        .library(name: "jxl-dynamic", targets: ["jxl-dynamic"]),
     ],
     targets: [
         .binaryTarget(
             name: "jxl",
-            url: "\(baseURL)/libjxl.xcframework.zip",
+            url: "\(baseURL)/libjxl-static.xcframework.zip",
+            checksum: "TODO"
+        ),
+        .binaryTarget(
+            name: "jxl-dynamic",
+            url: "\(baseURL)/libjxl-dynamic.xcframework.zip",
             checksum: "TODO"
         ),
     ]

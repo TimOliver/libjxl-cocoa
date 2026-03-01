@@ -33,10 +33,13 @@ jobs:
           # Update version
           sed -i '' "s/let version = \".*\"/let version = \"${{ inputs.version }}\"/" Package.swift
 
-          # Replace checksum
-          CHECKSUM=$(swift package compute-checksum output/libjxl.xcframework.zip)
-          echo "libjxl.xcframework.zip: $CHECKSUM"
-          sed -i '' "s/checksum: \".*\"/checksum: \"$CHECKSUM\"/" Package.swift
+          # Replace checksums for each combined xcframework zip
+          for ZIP in output/libjxl-static.xcframework.zip output/libjxl-dynamic.xcframework.zip; do
+            FILENAME=$(basename "$ZIP")
+            CHECKSUM=$(swift package compute-checksum "$ZIP")
+            echo "$FILENAME: $CHECKSUM"
+            sed -i '' "/$FILENAME/{n;s/checksum: \".*\"/checksum: \"$CHECKSUM\"/;}" Package.swift
+          done
 
       - name: Commit Package.swift
         run: |
@@ -51,4 +54,4 @@ jobs:
         with:
           tag_name: ${{ inputs.version }}
           name: v${{ inputs.version }}
-          files: output/libjxl.xcframework.zip
+          files: output/*.xcframework.zip
