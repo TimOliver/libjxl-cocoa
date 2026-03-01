@@ -1,0 +1,51 @@
+name: Build XCFrameworks
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g. 0.11.1)'
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cmake
+        run: brew install cmake
+
+      - name: Install additional platform SDKs
+        run: |
+          xcodebuild -downloadPlatform tvOS
+          xcodebuild -downloadPlatform visionOS
+
+      - name: Build all platforms
+        run: sh build.sh all
+
+      - name: Update Package.swift
+        run: |
+          # Update version
+          sed -i '' "s/let version = \".*\"/let version = \"${{ inputs.version }}\"/" Package.swift
+
+          # Replace checksum
+          CHECKSUM=$(swift package compute-checksum output/libjxl.xcframework.zip)
+          echo "libjxl.xcframework.zip: $CHECKSUM"
+          sed -i '' "s/checksum: \".*\"/checksum: \"$CHECKSUM\"/" Package.swift
+
+      - name: Commit Package.swift
+        run: |
+          git config user.name "Tim Oliver"
+          git config user.email "TimOliver@users.noreply.github.com"
+          git add Package.swift
+          git commit -m "Update Package.swift for ${{ inputs.version }}"
+          git push
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.version }}
+          name: v${{ inputs.version }}
+          files: output/libjxl.xcframework.zip
