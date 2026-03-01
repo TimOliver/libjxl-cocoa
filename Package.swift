@@ -2,7 +2,7 @@
 
 import PackageDescription
 
-let version = "0.11.1"
+let version = "0.11.2"
 let baseURL = "https://github.com/TimOliver/libjxl-cocoa/releases/download/\(version)"
 
 let package = Package(
@@ -20,7 +20,7 @@ let package = Package(
         .binaryTarget(
             name: "jxl",
             url: "\(baseURL)/libjxl.xcframework.zip",
-            checksum: "TODO"
+            checksum: "30dd27b0874d5c844c8d97c95c14b3b532abcd86e6f43da00bf5bd27c55b0f9b"
         ),
     ]
 )
