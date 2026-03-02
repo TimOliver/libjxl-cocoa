@@ -54,4 +54,4 @@ jobs:
         with:
           tag_name: ${{ inputs.version }}
           name: v${{ inputs.version }}
-          files: output/*.xcframework.zip
+          files: output/*.zip
