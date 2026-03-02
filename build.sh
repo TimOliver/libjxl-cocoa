@@ -205,23 +205,8 @@ PLIST
 write_modulemap() {
 cat <<EOT > $1
 framework module jxl [system] {
-  header "jxl/jxl_export.h"
-  header "jxl/jxl_cms_export.h"
-  header "jxl/jxl_threads_export.h"
-  header "jxl/types.h"
-  header "jxl/memory_manager.h"
-  header "jxl/stats.h"
-  header "jxl/cms.h"
-  header "jxl/cms_interface.h"
-  header "jxl/color_encoding.h"
-  header "jxl/compressed_icc.h"
-  header "jxl/codestream_header.h"
-  header "jxl/decode.h"
-  header "jxl/encode.h"
-  header "jxl/gain_map.h"
-  header "jxl/parallel_runner.h"
-  header "jxl/thread_parallel_runner.h"
-  header "jxl/resizable_parallel_runner.h"
+  umbrella "jxl"
+  module * { export * }
   export *
 }
 EOT
