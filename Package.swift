@@ -21,12 +21,12 @@ let package = Package(
         .binaryTarget(
             name: "jxl",
             url: "\(baseURL)/libjxl-v\(version)-xcframework-static.zip",
-            checksum: "34f1335d1c70d03e3f5fb11527b44a2e2267017668bcc476aed17985bb1fd9a5"
+            checksum: "cd8455b3295bfb872ffc1fc5d334bb491545b18088b1c111328a9ddda52da60f"
         ),
         .binaryTarget(
             name: "jxl-dynamic",
             url: "\(baseURL)/libjxl-v\(version)-xcframework-dynamic.zip",
-            checksum: "ea337f4e08db1397b187076e1da1ffc42996221a432b384886763644f368b233"
+            checksum: "b47e3895abc46004ed51ffa136c89bc8cf0420c59f27c594974b336dde33b79b"
         ),
     ]
 )
