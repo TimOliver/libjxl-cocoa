@@ -1,4 +1,5 @@
 #!/bin/sh
+set -e
 
 # Print a list of all of the build options this script supports
 usage() {
@@ -84,22 +85,26 @@ build() {
   make -j$(sysctl -n hw.ncpu)
 
   # Merge all static libraries into a single libjxl.a
+  # Rename cmake's libjxl.a first so the find below doesn't pick up a
+  # previously-merged archive on re-runs (which would cause duplicate symbols).
   # Exclude decoder-only lib (libjxl_dec) to avoid duplicate symbols,
-  # and exclude test/gtest libraries
+  # and exclude test/gtest libraries.
+  mv libjxl.a libjxl-cmake.a 2>/dev/null || true
   STATIC_LIBS=$(find . -name "*.a" -type f \
     ! -name "libjxl_dec*" \
+    ! -name "libjxl.a" \
     ! -name "*test*" ! -name "*gtest*" \
-    ! -path "*/CMakeFiles/*")
+    ! -path "*/CMakeFiles/*" \
+    ! -path "*/tools/*")
 
   if [ ! -z "${STATIC_LIBS}" ]; then
-    libtool -static -o libjxl-merged.a ${STATIC_LIBS}
-    mv libjxl-merged.a libjxl.a
+    libtool -static -o libjxl.a ${STATIC_LIBS}
   fi
 
   # Create dynamic library from merged static archive
   SDK=$(grep 'xcrun --sdk' toolchain.cmake | sed "s/.*--sdk \([^ ]*\) .*/\1/")
   SYSROOT=$(xcrun --sdk ${SDK} --show-sdk-path)
-  C_FLAGS=$(grep 'set(CMAKE_C_FLAGS' toolchain.cmake | sed 's/.*"\(.*\)"/\1/')
+  C_FLAGS=$(grep 'set(CMAKE_C_FLAGS' toolchain.cmake | sed 's/.*"\(.*\)".*/\1/')
 
   ${CXX_COMPILER} -dynamiclib \
     -install_name @rpath/jxl.framework/jxl \
@@ -175,6 +180,7 @@ create_jxl_framework() {
   cp "${LIB}" "${FW}/jxl"
   cp -R ${HEADERS_DIR}/* "${FW}/Headers/"
   cp "${MODULEMAP_FILE}" "${FW}/Modules/module.modulemap"
+
 cat > "${FW}/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -243,12 +249,12 @@ make_platform_xcframework() {
     DYNAMIC_LIB="${BUILD_DIR}/${SLICE}/libjxl.dylib"
 
     if [ -f "${STATIC_LIB}" ]; then
-      FW="${BUILD_DIR}/${SLICE}/jxl-static.framework"
+      FW="${BUILD_DIR}/${SLICE}/static/jxl.framework"
       create_jxl_framework "${FW}" "${STATIC_LIB}" "${STATIC_HEADERS}" "${MODULEMAP_FILE}"
       STATIC_ARGS+="-framework ${FW} "
     fi
     if [ -f "${DYNAMIC_LIB}" ]; then
-      FW="${BUILD_DIR}/${SLICE}/jxl-dynamic.framework"
+      FW="${BUILD_DIR}/${SLICE}/dynamic/jxl.framework"
       create_jxl_framework "${FW}" "${DYNAMIC_LIB}" "${DYNAMIC_HEADERS}" "${MODULEMAP_FILE}"
       DYNAMIC_ARGS+="-framework ${FW} "
     fi
@@ -417,7 +423,7 @@ make_xcframework() {
     for SLICE in ios-device ios-simulator ios-mac-catalyst; do
       LIB="build-ios/ios-output/${SLICE}/libjxl.${EXT}"
       if [ -f "${LIB}" ]; then
-        FW="build-ios/ios-output/${SLICE}/jxl-${VARIANT}.framework"
+        FW="build-ios/ios-output/${SLICE}/${VARIANT}/jxl.framework"
         create_jxl_framework "${FW}" "${LIB}" "${HEADERS}" "${MODULEMAP_FILE}"
         XCF_ARGS+="-framework ${FW} "
       fi
@@ -426,7 +432,7 @@ make_xcframework() {
     # macOS
     LIB="build-macos/macos-output/macos/libjxl.${EXT}"
     if [ -f "${LIB}" ]; then
-      FW="build-macos/macos-output/macos/jxl-${VARIANT}.framework"
+      FW="build-macos/macos-output/macos/${VARIANT}/jxl.framework"
       create_jxl_framework "${FW}" "${LIB}" "${HEADERS}" "${MODULEMAP_FILE}"
       XCF_ARGS+="-framework ${FW} "
     fi
@@ -435,7 +441,7 @@ make_xcframework() {
     for SLICE in tvos-device tvos-simulator; do
       LIB="build-tvos/tvos-output/${SLICE}/libjxl.${EXT}"
       if [ -f "${LIB}" ]; then
-        FW="build-tvos/tvos-output/${SLICE}/jxl-${VARIANT}.framework"
+        FW="build-tvos/tvos-output/${SLICE}/${VARIANT}/jxl.framework"
         create_jxl_framework "${FW}" "${LIB}" "${HEADERS}" "${MODULEMAP_FILE}"
         XCF_ARGS+="-framework ${FW} "
       fi
@@ -445,7 +451,7 @@ make_xcframework() {
     for SLICE in visionos-device-arm64 visionos-simulator-arm64; do
       LIB="build-visionos/visionos-output/${SLICE}/libjxl.${EXT}"
       if [ -f "${LIB}" ]; then
-        FW="build-visionos/visionos-output/${SLICE}/jxl-${VARIANT}.framework"
+        FW="build-visionos/visionos-output/${SLICE}/${VARIANT}/jxl.framework"
         create_jxl_framework "${FW}" "${LIB}" "${HEADERS}" "${MODULEMAP_FILE}"
         XCF_ARGS+="-framework ${FW} "
       fi
