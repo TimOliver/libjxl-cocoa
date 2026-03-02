@@ -69,3 +69,4 @@ GitHub Actions workflow at `.github/workflows/build.yml`, triggered manually wit
 - Before merging static libs with `libtool`, `libjxl.a` is renamed to `libjxl-cmake.a` to prevent double-merging on re-runs
 - `tools/` is excluded from the `libtool` merge to avoid duplicate `enc_fast_lossless.cc.o` symbols
 - Static and dynamic frameworks are staged in `{slice}/static/` and `{slice}/dynamic/` subdirectories so both can be named `jxl.framework` without colliding
+- Headers are copied **flat** into `include/` (not `include/jxl/`), so the framework layout is `Headers/*.h`. This makes `#include <jxl/foo.h>` resolve correctly via the framework mechanism (framework name = `jxl`, header = `foo.h`). Using a `jxl/` subdirectory inside `Headers/` breaks clang's module system because `umbrella "jxl"` resolves relative to the framework root (where the binary named `jxl` lives), not relative to `Headers/`.

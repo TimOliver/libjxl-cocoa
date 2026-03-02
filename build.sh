@@ -114,22 +114,22 @@ build() {
     -lc++ \
     -o libjxl.dylib
 
-  # Copy public headers into the build output
-  mkdir -p include/jxl
-  cp ../../libjxl/lib/include/jxl/*.h include/jxl/
+  # Copy public headers into the build output (flat, no jxl/ subdirectory)
+  mkdir -p include
+  cp ../../libjxl/lib/include/jxl/*.h include/
 
   # Copy generated export headers (produced by cmake)
   for EXPORT_HEADER in $(find . -name "*_export.h" -path "*/jxl/*" -type f); do
-    cp ${EXPORT_HEADER} include/jxl/
+    cp ${EXPORT_HEADER} include/
   done
 
   # Create dynamic headers (original, without JXL_STATIC_DEFINE)
   mkdir -p include-dynamic
-  cp -r include/jxl include-dynamic/jxl
+  cp include/*.h include-dynamic/
 
   # For static headers, force JXL_STATIC_DEFINE so export macros resolve to nothing
   for HEADER in jxl_export.h jxl_cms_export.h jxl_threads_export.h; do
-    HEADER_FILE="include/jxl/${HEADER}"
+    HEADER_FILE="include/${HEADER}"
     if [ -f "${HEADER_FILE}" ]; then
       { echo "#ifndef JXL_STATIC_DEFINE"; echo "#define JXL_STATIC_DEFINE"; echo "#endif"; echo ""; cat "${HEADER_FILE}"; } > "${HEADER_FILE}.tmp"
       mv "${HEADER_FILE}.tmp" "${HEADER_FILE}"
@@ -205,8 +205,23 @@ PLIST
 write_modulemap() {
 cat <<EOT > $1
 framework module jxl [system] {
-  umbrella "jxl"
-  module * { export * }
+  header "jxl_export.h"
+  header "jxl_cms_export.h"
+  header "jxl_threads_export.h"
+  header "types.h"
+  header "memory_manager.h"
+  header "stats.h"
+  header "cms.h"
+  header "cms_interface.h"
+  header "color_encoding.h"
+  header "compressed_icc.h"
+  header "codestream_header.h"
+  header "decode.h"
+  header "encode.h"
+  header "gain_map.h"
+  header "parallel_runner.h"
+  header "thread_parallel_runner.h"
+  header "resizable_parallel_runner.h"
   export *
 }
 EOT
@@ -367,7 +382,7 @@ make_xcframework() {
   # Find header source from any available build slice
   HEADER_SOURCE=""
   for DIR in build-ios/ios-device-arm64 build-macos/macos-arm64 build-tvos/tvos-device-arm64 build-visionos/visionos-device-arm64; do
-    if [ -d "${DIR}/include/jxl" ]; then
+    if [ -d "${DIR}/include" ]; then
       HEADER_SOURCE="${DIR}"
       break
     fi
@@ -384,9 +399,9 @@ make_xcframework() {
   STATIC_HEADERS="${OUTPUT_DIR}/include-static"
   DYNAMIC_HEADERS="${OUTPUT_DIR}/include-dynamic"
   rm -rf ${STATIC_HEADERS} ${DYNAMIC_HEADERS}
-  mkdir -p ${STATIC_HEADERS}/jxl ${DYNAMIC_HEADERS}/jxl
-  cp ${HEADER_SOURCE}/include/jxl/*.h ${STATIC_HEADERS}/jxl/
-  cp ${HEADER_SOURCE}/include-dynamic/jxl/*.h ${DYNAMIC_HEADERS}/jxl/
+  mkdir -p ${STATIC_HEADERS} ${DYNAMIC_HEADERS}
+  cp ${HEADER_SOURCE}/include/*.h ${STATIC_HEADERS}/
+  cp ${HEADER_SOURCE}/include-dynamic/*.h ${DYNAMIC_HEADERS}/
 
   # Write module map
   MODULEMAP_FILE="${OUTPUT_DIR}/module.modulemap"
