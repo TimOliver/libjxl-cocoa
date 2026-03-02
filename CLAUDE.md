@@ -58,7 +58,9 @@ rm -rf build-*/static build-*/dynamic output
 
 GitHub Actions workflow at `.github/workflows/build.yml`, triggered manually with a `version` input. Runs on `macos-26`, installs cmake via brew, downloads tvOS/visionOS SDKs, builds, updates `Package.swift` checksums, commits, and creates a GitHub release.
 
-The checksum step matches on the stable suffix `xcframework-{variant}.zip` in `Package.swift` (since the URL contains Swift string interpolation `\(version)` which won't match a literal filename). The release upload uses `output/*.zip` (not `*.xcframework.zip`) to match the versioned filenames.
+- The checksum step matches on the stable suffix `xcframework-{variant}.zip` in `Package.swift` (since the URL contains Swift string interpolation `\(version)` which won't match a literal filename).
+- The release upload uses `output/*.zip` (not `*.xcframework.zip`) to match the versioned filenames.
+- The commit step runs `git pull --rebase` before `git push` to handle any commits pushed to `main` during the build (e.g. README updates).
 
 ## Known issues / fixes applied
 

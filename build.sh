@@ -204,7 +204,7 @@ PLIST
 # Write a Clang module map to the given file path
 write_modulemap() {
 cat <<EOT > $1
-module jxl [system] {
+framework module jxl [system] {
   header "jxl/jxl_export.h"
   header "jxl/jxl_cms_export.h"
   header "jxl/jxl_threads_export.h"
