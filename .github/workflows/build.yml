@@ -34,11 +34,11 @@ jobs:
           sed -i '' "s/let version = \".*\"/let version = \"${{ inputs.version }}\"/" Package.swift
 
           # Replace checksums for each combined xcframework zip
-          for ZIP in output/libjxl-static.xcframework.zip output/libjxl-dynamic.xcframework.zip; do
-            FILENAME=$(basename "$ZIP")
+          for VARIANT in static dynamic; do
+            ZIP="output/libjxl-v${{ inputs.version }}-xcframework-${VARIANT}.zip"
             CHECKSUM=$(swift package compute-checksum "$ZIP")
-            echo "$FILENAME: $CHECKSUM"
-            sed -i '' "/$FILENAME/{n;s/checksum: \".*\"/checksum: \"$CHECKSUM\"/;}" Package.swift
+            echo "${VARIANT}: $CHECKSUM"
+            sed -i '' "/xcframework-${VARIANT}\.zip/{n;s/checksum: \".*\"/checksum: \"$CHECKSUM\"/;}" Package.swift
           done
 
       - name: Commit Package.swift

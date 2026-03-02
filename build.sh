@@ -263,15 +263,15 @@ make_platform_xcframework() {
   mkdir -p "${BUILD_DIR}/static" "${BUILD_DIR}/dynamic"
 
   if [ ! -z "${STATIC_ARGS}" ]; then
-    rm -rf "${BUILD_DIR}/static/libjxl.xcframework"
+    rm -rf "${BUILD_DIR}/static/jxl.xcframework"
     xcodebuild -create-xcframework ${STATIC_ARGS} \
-      -output "${BUILD_DIR}/static/libjxl.xcframework"
+      -output "${BUILD_DIR}/static/jxl.xcframework"
   fi
 
   if [ ! -z "${DYNAMIC_ARGS}" ]; then
-    rm -rf "${BUILD_DIR}/dynamic/libjxl.xcframework"
+    rm -rf "${BUILD_DIR}/dynamic/jxl.xcframework"
     xcodebuild -create-xcframework ${DYNAMIC_ARGS} \
-      -output "${BUILD_DIR}/dynamic/libjxl.xcframework"
+      -output "${BUILD_DIR}/dynamic/jxl.xcframework"
   fi
 }
 
@@ -462,11 +462,11 @@ make_xcframework() {
       continue
     fi
 
-    rm -rf "${OUTPUT_DIR}/libjxl-${VARIANT}.xcframework"
+    rm -rf "${OUTPUT_DIR}/jxl-${VARIANT}.xcframework"
     xcodebuild -create-xcframework ${XCF_ARGS} \
-      -output "${OUTPUT_DIR}/libjxl-${VARIANT}.xcframework"
+      -output "${OUTPUT_DIR}/jxl-${VARIANT}.xcframework"
 
-    echo "=== Created ${OUTPUT_DIR}/libjxl-${VARIANT}.xcframework ==="
+    echo "=== Created ${OUTPUT_DIR}/jxl-${VARIANT}.xcframework ==="
   done
 }
 
@@ -478,11 +478,11 @@ package() {
   # Package per-platform xcframeworks (8 zips)
   for PLATFORM in ios macos tvos visionos; do
     for VARIANT in static dynamic; do
-      XCF="build-${PLATFORM}/${VARIANT}/libjxl.xcframework"
+      XCF="build-${PLATFORM}/${VARIANT}/jxl.xcframework"
       if [ -d "${XCF}" ]; then
-        ZIP_NAME="libjxl-${PLATFORM}-${VARIANT}.xcframework.zip"
+        ZIP_NAME="libjxl-v${LIBRARY_VERSION}-xcframework-${PLATFORM}-${VARIANT}.zip"
         cd "build-${PLATFORM}/${VARIANT}"
-        zip -r -y "${OUTPUT_DIR}/${ZIP_NAME}" libjxl.xcframework
+        zip -r -y "${OUTPUT_DIR}/${ZIP_NAME}" jxl.xcframework
         cd ${BASE_PATH}
         echo "${ZIP_NAME}: $(swift package compute-checksum "${OUTPUT_DIR}/${ZIP_NAME}")"
       fi
@@ -491,11 +491,11 @@ package() {
 
   # Package combined xcframeworks (2 zips)
   for VARIANT in static dynamic; do
-    XCF="${OUTPUT_DIR}/libjxl-${VARIANT}.xcframework"
+    XCF="${OUTPUT_DIR}/jxl-${VARIANT}.xcframework"
     if [ -d "${XCF}" ]; then
-      ZIP_NAME="libjxl-${VARIANT}.xcframework.zip"
+      ZIP_NAME="libjxl-v${LIBRARY_VERSION}-xcframework-${VARIANT}.zip"
       cd ${OUTPUT_DIR}
-      zip -r -y "${ZIP_NAME}" "libjxl-${VARIANT}.xcframework"
+      zip -r -y "${ZIP_NAME}" "jxl-${VARIANT}.xcframework"
       cd ${BASE_PATH}
       echo "${ZIP_NAME}: $(swift package compute-checksum "${OUTPUT_DIR}/${ZIP_NAME}")"
     fi
