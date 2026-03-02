@@ -118,10 +118,10 @@ build() {
   mkdir -p include
   cp ../../libjxl/lib/include/jxl/*.h include/
 
-  # Copy generated export headers (produced by cmake)
-  for EXPORT_HEADER in $(find . -name "*_export.h" -path "*/jxl/*" -type f); do
-    cp ${EXPORT_HEADER} include/
-  done
+  # Copy cmake-generated public headers (e.g. version.h, *_export.h)
+  if [ -d "lib/include/jxl" ]; then
+    cp lib/include/jxl/*.h include/
+  fi
 
   # Create dynamic headers (original, without JXL_STATIC_DEFINE)
   mkdir -p include-dynamic
@@ -208,6 +208,7 @@ framework module jxl [system] {
   header "jxl_export.h"
   header "jxl_cms_export.h"
   header "jxl_threads_export.h"
+  header "version.h"
   header "types.h"
   header "memory_manager.h"
   header "stats.h"
